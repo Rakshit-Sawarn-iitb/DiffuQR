@@ -10,9 +10,6 @@ Usage:
     python scripts/pull_dataset.py --skip-videos      # frames + photos + manifests only
 
 HF token is read from HF_TOKEN in the .env file at the project root.
-
-Requires:
-    pip install huggingface_hub python-dotenv
 """
 
 import argparse

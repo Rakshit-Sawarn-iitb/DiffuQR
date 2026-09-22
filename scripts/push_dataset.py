@@ -17,11 +17,6 @@ Usage:
         --video data/raw/videos/IMG_1534.mp4 \
         --photo data/raw/reference_photos/IMG_1533.jpg \
         --session-id buggy03_20260918_01
-
-HF token is read from HF_TOKEN in the .env file at the project root.
-
-Requires:
-    pip install huggingface_hub opencv-python python-dotenv
 """
 
 import argparse

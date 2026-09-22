@@ -12,9 +12,6 @@ Output layout:
 Usage (standalone):
     python scripts/extract_frames.py --video data/raw/videos/IMG_1534.mp4 \
         --session-id buggy03_20260918_01
-
-Requires:
-    pip install opencv-python python-dotenv
 """
 
 import argparse
