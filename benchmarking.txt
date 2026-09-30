@@ -1,0 +1,25 @@
+============================================================
+OVERALL (all images)
+============================================================
+        images  detection_rate  avg_detections  avg_conf  avg_time_s
+method                                                              
+OpenCV     363           0.416           0.416     1.000       0.961
+SAM3       363           1.000           1.006     0.984       2.455
+
+============================================================
+BY SOURCE (clean reference photo vs. motion-blurred frame)
+============================================================
+                  images  detection_rate  avg_detections  avg_conf  avg_time_s
+source    method                                                              
+frame     OpenCV     362           0.414           0.414     1.000       0.961
+          SAM3       362           1.000           1.006     0.984       2.455
+reference OpenCV       1           1.000           1.000     1.000       0.923
+          SAM3         1           1.000           1.000     0.986       2.477
+
+============================================================
+BY SESSION (frames only)
+============================================================
+                            frames  detection_rate  avg_conf
+session_id          method                                  
+buggy01_20260917_01 OpenCV     362           0.414     1.000
+                    SAM3       362           1.000     0.984
