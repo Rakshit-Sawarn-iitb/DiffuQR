@@ -1,25 +1,36 @@
 # Phase 5a Findings - Classical Deconvolution Baselines
 
-Measured 2026-10-15 on all 328 frames with an aligned per-frame kernel from
-the Phase 0.3 bank. Full table in
-`artifacts/phase5a/classical_deblur_summary.md`.
+Re-measured 2026-10-16 on 335 frames with the CLEANED kernel bank (main
+PSF lobe only; see "Correction" below). Full table in
+`artifacts/phase5a/classical_deblur_summary.md`; the 2026-10-15 run is in
+`artifacts/phase5a/_before_kernelclean/`.
 
 ## Headline
 
 Classical kernel-based single-image deconvolution, with the **oracle kernel
-estimated from the aligned reference**, delivers essentially no decode-rate
-improvement. The blurriest tertile stays at 1%. Richardson-Lucy actively
-hurts.
+estimated from the aligned reference**, delivers no decode-rate
+improvement. The blurriest tertile stays at 1%.
 
-| method | overall | **blurriest** | medium | sharpest |
+| method (any-decoder, 256-crop) | overall | **blurriest** | medium | sharpest |
 |---|---|---|---|---|
-| raw @ 256-crop (baseline) | 26% | **1%** | 30% | 46% |
-| oracle-kernel Wiener | 27% | 1% | 32% | 49% |
-| bank-mean Wiener (blind) | 27% | 1% | 33% | 47% |
-| oracle Richardson-Lucy | 13% | 0% | 18% | 21% |
-| bank-mean Richardson-Lucy | 10% | 0% | 12% | 19% |
+| raw @ 256-crop (baseline) | 25% | **1%** | 29% | 46% |
+| oracle-kernel Wiener | 25% | 1% | 28% | 46% |
+| bank-mean Wiener (blind) | 27% | 1% | 29% | 50% |
+| oracle Richardson-Lucy | 26% | 1% | 30% | 47% |
+| bank-mean Richardson-Lucy | 23% | 1% | 29% | 40% |
 
-Wrong-decode count across 3280 attempts: 0.
+Wrong decodes: 0.
+
+## Correction (2026-10-16)
+
+The first run used raw Fourier-division kernels, which put ~67% of their
+mass in a diffuse floor over the whole 25x25 support (illumination mismatch
+between reference and frame absorbed into the kernel). With a gain/offset
+fitted, the cleaned main-lobe kernel explains real frames 3x better (resid
+MSE 0.0057 vs 0.0178; raw was worse than no blur at all). Consequences:
+- The headline (oracle deconvolution: +0 on the blurriest tertile) holds.
+- The earlier "Richardson-Lucy actively hurts (26% -> 13%)" was an artefact
+  of the hazy kernels and is **retracted**: with clean kernels RL is neutral.
 
 ## Reading
 
@@ -33,13 +44,11 @@ and non-stationary blur that classical kernel inversion cannot touch.
 We feared this would eat the paper. It doesn't. The learned-restorer story
 starts with +0 points to beat on the blurriest tertile, not +40.
 
-### 3. Richardson-Lucy diverges on QR structure.
-On high-contrast binary edges RL amplifies into speckle. Reported as a
-negative result; also serves as a note not to recommend RL for QR
-restoration in future work.
+### 3. (Retracted) "Richardson-Lucy diverges on QR structure."
+That came from hazy kernels; see Correction above.
 
 ### 4. The blurriest tertile is the hard subset by every measure.
-Native-res any-decoder = 1%. Oracle Wiener = 1%. Oracle RL = 0%. Four
+Native-res any-decoder = 1%. Oracle Wiener = 1%. Oracle RL = 1%. Four
 independent measurements of the same slice all land near zero. This is
 where the paper's method has to earn its place.
 

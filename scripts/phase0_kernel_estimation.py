@@ -34,7 +34,7 @@ from PIL import Image
 from diffuqr import config
 from diffuqr.align import align_reference_to_frame
 from diffuqr.image import crop_square, laplacian_variance, pil_to_rgb_array
-from diffuqr.kernel import estimate_kernel_fft, kernel_grid_image, kernel_moments
+from diffuqr.kernel import clean_kernel, estimate_kernel_fft, kernel_grid_image, kernel_moments
 
 
 FRAME_RE = re.compile(r"^(?P<session>[a-z0-9]+_\d{8}_\d{2})_f(?P<idx>\d+)\.jpg$")
@@ -108,6 +108,7 @@ def run(args) -> None:
 
     rows: List[dict] = []
     kept_kernels: List[np.ndarray] = []
+    kept_raw: List[np.ndarray] = []
     kept_meta: List[dict] = []
     t_start = time.time()
     n_total = n_aligned = n_kept = 0
@@ -150,9 +151,15 @@ def run(args) -> None:
 
             frame_g = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY).astype(np.float32) / 255.0
             ref_warp_g = cv2.cvtColor(warped_bgr, cv2.COLOR_BGR2GRAY).astype(np.float32) / 255.0
-            k = estimate_kernel_fft(frame_g, ref_warp_g, kernel_size=args.kernel_size, eps=args.eps)
-            stats = kernel_moments(k)
-            resid = float(np.mean((frame_g - cv2.filter2D(ref_warp_g, -1, k)) ** 2))
+            k_raw = estimate_kernel_fft(frame_g, ref_warp_g, kernel_size=args.kernel_size, eps=args.eps)
+            k = clean_kernel(k_raw)  # main lobe only; the diffuse floor is illumination mismatch, not blur
+            stats = kernel_moments(k_raw)
+            # Residual with a global gain/offset (illumination) fitted, as the
+            # degradation model applies illumination separately from blur.
+            pred = cv2.filter2D(ref_warp_g, -1, k).ravel()
+            A = np.stack([pred, np.ones_like(pred)], 1)
+            coef, *_ = np.linalg.lstsq(A, frame_g.ravel(), rcond=None)
+            resid = float(np.mean((frame_g.ravel() - A @ coef) ** 2))
             blur = laplacian_variance(frame_rgb)
 
             m = FRAME_RE.match(fp.name)
@@ -167,6 +174,7 @@ def run(args) -> None:
                 "k_angle_deg": round(stats["angle_deg"], 2),
             })
             kept_kernels.append(k.astype(np.float32))
+            kept_raw.append(k_raw.astype(np.float32))
             kept_meta.append({
                 "session_id": sid, "qr_id": qr_id, "frame_idx": frame_idx,
                 "align_ncc": float(score), "k_length": stats["length"], "k_angle_deg": stats["angle_deg"],
@@ -183,7 +191,9 @@ def run(args) -> None:
     kernels_np = np.stack(kept_kernels, axis=0)
     npz_path = config.CALIBRATION_DIR / "kernels.npz"
     npz_path.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(npz_path, kernels=kernels_np,
+    # `kernels` = cleaned main-lobe PSFs (what every consumer should use);
+    # `kernels_raw` = raw Fourier-division estimates, kept for reference.
+    np.savez_compressed(npz_path, kernels=kernels_np, kernels_raw=np.stack(kept_raw, axis=0),
                         meta=np.array([json.dumps(m) for m in kept_meta], dtype=object))
     print(f"\nSaved {n_kept} kernels -> {npz_path}  (shape {kernels_np.shape})")
 

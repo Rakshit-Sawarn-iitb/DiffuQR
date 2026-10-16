@@ -99,6 +99,36 @@ def fixed_template(version: int, error: str, mask: int) -> Tuple[np.ndarray, np.
     return fixed, np.where(fixed, arr, 0).astype(np.uint8)
 
 
+@lru_cache(maxsize=None)
+def version_fixed(version: int) -> Tuple[np.ndarray, np.ndarray]:
+    """(mask, values) of modules fixed by the VERSION alone: finders,
+    separators, timing, alignment, dark module, version info. Excludes the
+    format-info modules, which depend on (EC, mask) and must be read."""
+    combos = [fixed_template(version, e, m) for e in "LMQH" for m in range(8)]
+    fixed0, vals0 = combos[0]
+    same = np.ones_like(fixed0)
+    for f, v in combos[1:]:
+        same &= (f == fixed0) & (v == vals0)
+    mask = fixed0 & same
+    return mask, np.where(mask, vals0, 0).astype(np.uint8)
+
+
+def read_format(bits: np.ndarray, version: int) -> Tuple[str, int, int]:
+    """Most consistent (EC, mask) for a grid: compares the 30 format-info
+    modules (two copies of the BCH-protected 15-bit word) with every
+    combination. Returns (error, mask, n_disagreeing_modules)."""
+    vmask, _ = version_fixed(version)
+    best = None
+    for e in "LMQH":
+        for m in range(8):
+            f, vals = fixed_template(version, e, m)
+            region = f & ~vmask
+            d = int((bits[region] != vals[region]).sum())
+            if best is None or d < best[2]:
+                best = (e, m, d)
+    return best
+
+
 # -- Identification ----------------------------------------------------------
 
 @dataclass

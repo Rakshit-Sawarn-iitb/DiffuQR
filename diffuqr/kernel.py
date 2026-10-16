@@ -39,6 +39,30 @@ def estimate_kernel_fft(
     return k
 
 
+def clean_kernel(k: np.ndarray, peak_frac: float = 0.15, dilate: int = 1) -> np.ndarray:
+    """Keep only the PSF's main lobe: pixels >= `peak_frac * peak` that are
+    connected to the peak, dilated by `dilate` px, clipped >= 0, sum 1.
+
+    Raw Fourier-division kernels put ~2/3 of their mass in a diffuse floor
+    over the whole support (median 33% in the main lobe on the buggy01
+    bank). Convolving with that floor acts as a strong contrast-reducing
+    haze, not motion blur; illumination/contrast changes are modelled
+    separately, so the blur kernel should be the lobe only."""
+    k = np.asarray(k, dtype=np.float32)
+    peak = float(k.max())
+    if peak < 1e-9:
+        return k
+    bin_mask = (k >= peak_frac * peak).astype(np.uint8)
+    py, px = np.unravel_index(int(np.argmax(k)), k.shape)
+    _, labels = cv2.connectedComponents(bin_mask, connectivity=8)
+    lobe = (labels == labels[py, px]).astype(np.uint8)
+    if dilate:
+        lobe = cv2.dilate(lobe, np.ones((2 * dilate + 1, 2 * dilate + 1), np.uint8))
+    out = np.clip(k, 0, None) * lobe
+    s = out.sum()
+    return out / s if s > 1e-9 else out
+
+
 def kernel_moments(k: np.ndarray, peak_frac: float = 0.20) -> Dict[str, float]:
     """PSF spatial statistics via second-order image moments.
 
