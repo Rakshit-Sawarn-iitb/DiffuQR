@@ -8,7 +8,8 @@ Written 2026-10-15. Set up at the start of Phase 0.
 DiffuQR/
 ├── diffuqr/            # importable library (one source of truth for logic)
 │   ├── __init__.py
-│   └── config.py       # paths, .env, session-id parsing
+│   ├── config.py       # paths, .env, session-id parsing
+│   ├── qrgrid.py       # rectify quad, sample module grid, identify version/EC/mask
 │                       # future: decode.py, blur.py, kernel.py, detect.py,
 │                       #         rectify.py, degrade.py, synth.py, models.py
 │

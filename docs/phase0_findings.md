@@ -14,9 +14,10 @@ here depends on a trained model.
 | Wrong-decode rate across 2866 attempts | **0** | same (Reed-Solomon never fakes a hit) |
 | QR size percentiles (p5/p50/p95) | 457 / 616 / 841 px | `pixel_module_stats_summary.md` |
 | px/module (version 11, EC-L) median | **10.1** | same |
+| buggy01 version / EC / mask (measured, not assumed) | **v11 (61x61), EC-L, mask 2** | `reference_version.md` |
 | Frames with >= 4 px/module (any candidate version) | **100%** | same |
 | Reference-photo px/module (ideal upper bound, v=11) | 32.1 | same |
-| Alignment success (NCC >= 0.5) | 92% (328/357) | `kernels_summary.md` |
+| Alignment success (NCC >= 0.5) | 94% (335/357; was 328 before the 2026-10-16 rotation fix) | `kernels_summary.md` |
 | Motion-blur kernel length, blurriest tertile (256-crop px) | median 6.2, p95 ~10 | same |
 | Motion-blur kernel length, sharpest tertile | median 1.2 (near point) | same |
 | Kernel aspect ratio, blurriest tertile | median ~6.5x (strongly directional) | same |
@@ -62,6 +63,59 @@ We have a 328-kernel empirical bank at `data/calibration/kernels.npz`.
 Phase 1 degradation samples kernels from this bank; synthetic training
 data becomes realistic by construction, and this is a defensible "real-to-
 sim" contribution on its own.
+
+### 6. Version 11 is measured, not just assumed (2026-10-16).
+`scripts/phase0_reference_version.py` rectifies the reference QR, samples
+the grid and matches the payload-independent modules (function patterns +
+format + version info): v11 / EC-L / mask 2 at 99.8% of 489 modules, best
+other version 78.7%. The sampled grid, re-rendered, decodes to the GT
+payload; it is saved as `data/calibration/buggy01_modules.npy`, a
+near-exact GT bit grid for module-space evaluation (Phase 2/3). The
+handoff's "~73 modules / v14" was wrong. Note: reference JPEGs carry EXIF
+orientation 6; SAM3 boxes are in raw (PIL) pixel coordinates, so never
+pair them with `cv2.imread`, which auto-rotates.
+
+### 7. Kernel bank was biased against blurry frames; partly fixed (2026-10-16).
+The reference crop is stored 90 deg rotated (EXIF) relative to the upright
+frames, so alignment depended entirely on ORB, which fails on blur: 20 of
+the 29 dropped frames were in the blurriest tertile. `align.py` now also
+tries 90/180/270 deg initialisations: 335 kernels (was 328), blurriest
+drops 20 -> 13. The remaining 22 failures are genuine misalignments (NCC
+0.0-0.17: strong perspective, or QR at the frame edge). Old bank backed up
+in `artifacts/phase0/_before_rotfix/`. Phase 5a was measured on the old
+bank and has not been re-run.
+
+### 8. Module-grid errors and our own RS decoder on real frames (Phase 0.4, 2026-10-16).
+`scripts/phase0_grid_errors.py`, full table in `artifacts/phase0/grid_errors_summary.md`.
+Geometry is ORACLE (reference alignment), as are version/EC/mask, so these
+are upper bounds for a module reader, not a deployable pipeline.
+
+| method (357 frames) | overall | blurriest | medium | sharpest |
+|---|---|---|---|---|
+| pyzbar/opencv, full-native (Phase 0.1) | 28% | 1% | 28% | 55% |
+| sampled grid + RS hard (local threshold) | 43% | 1% | 47% | 80% |
+| + soft erasures, no learning | 45% | 1% | 50% | 85% |
+| perfect-erasure ceiling for this grid | 49% | 2% | 59% | 87% |
+
+Wrong decodes: 0 (after reserving 4 check symbols per block; spending
+the full RS budget on erasures produced garbage "successes").
+
+- **RS is a cliff, not a slope.** A block survives <= 10 wrong codewords
+  (<= 20 erased) of 101. Blurriest frames have median module error 26%
+  -> ~92 of 101 codewords wrong in the worst block. Erasures cannot touch
+  that; the module error must drop ~10x (to ~2-3%) before RS helps.
+- **C3 (soft erasures) gives a real but small gain where frames are near
+  the cliff:** +9 frames with intensity-only confidence, and the perfect-
+  erasure ceiling is +15 more. A better per-module posterior has at most
+  ~4 points overall to win here, almost none on the blurriest tertile.
+- **The blurriest tertile needs a better grid estimate, not better
+  decoding:** restoration (C2) or multi-frame fusion (C4). Alignment
+  itself fails on 33/119 blurriest frames.
+- **Perspective is real:** side-length ratio median 1.18 (p95 1.48),
+  corner-angle deviation median 7.6 deg (p95 18 deg). Box crops are not
+  flat; rectification (or a model trained on skewed crops) is needed.
+- Part of the 28% -> 43% gain is the oracle geometry; it is not a
+  baseline a decoder without the reference could reach.
 
 ## What is still open
 

@@ -23,7 +23,7 @@ import segno
 
 @dataclass
 class SynthQR:
-    image_rgb: np.ndarray      # uint8 (H, W, 3), white bg, black modules, no quiet zone padding handled externally
+    image_rgb: np.ndarray      # uint8 (H, W, 3), white bg, black modules, >= 4-module quiet zone
     modules: np.ndarray        # uint8 (N, N), 1 = dark module
     version: int
     error: str                 # 'L' / 'M' / 'Q' / 'H'
@@ -31,13 +31,19 @@ class SynthQR:
     px_per_module: int         # integer scale factor (so the rendering is exact)
 
 
-def _render(qr: segno.QRCode, img_size: int) -> Tuple[np.ndarray, np.ndarray, int]:
+def _render(qr: segno.QRCode, img_size: int, quiet_zone: int = 4) -> Tuple[np.ndarray, np.ndarray, int]:
     """Render a segno QR to a square RGB image of side `img_size`.
-    Returns (image_rgb, modules_2d, integer px/module scale)."""
+    Returns (image_rgb, modules_2d, integer px/module scale).
+
+    The scale is chosen so at least `quiet_zone` modules of white border
+    remain on every side (the spec asks for 4). Sizing from `img_size // n`
+    alone left 0-2 modules for some versions, and the perspective warp in
+    `degrade.py` then pushed the code off-canvas (v11/v13/v14 failed to
+    decode even without blur)."""
     # segno's `matrix` is the inner module grid without the quiet zone.
     matrix = np.array(qr.matrix, dtype=np.uint8)
     n = matrix.shape[0]
-    scale = max(1, img_size // n)
+    scale = max(1, img_size // (n + 2 * quiet_zone))
     inner = (1 - np.repeat(np.repeat(matrix, scale, axis=0), scale, axis=1)) * 255
     inner_px = n * scale
     pad = (img_size - inner_px) // 2

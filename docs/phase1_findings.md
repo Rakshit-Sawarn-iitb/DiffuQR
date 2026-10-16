@@ -17,33 +17,35 @@ Written 2026-10-15. Smoke-tested 100 pairs; full details in
   pairs + `manifest.jsonl` under `data/synth/<tag>/`.
 - `scripts/phase1_decode_synth.py` - decode-rate sanity check.
 
-## Smoke-test numbers (n = 100, size = 512)
+## Smoke-test numbers (n = 100, size = 512, seed 0)
+
+Re-run 2026-10-16 after the quiet-zone fix below.
 
 | | result |
 |---|---|
 | Clean decode rate | **100%** |
-| Degraded decode rate | **22%** |
-| Real buggy01 target (Phase 0.1 at 256-crop) | 26% |
+| Degraded decode rate | **31%** (was 22% before the fix) |
+| Real buggy01 (Phase 0.1 native any-decoder / Phase 5a 256-crop) | 28% / 26% |
 
-Degraded is within noise of real; calibration doesn't need re-tuning
-before Phase 2 training. If anything the synth is 4 points harder on
-aggregate, which is the right side to err on.
+Aggregate degraded decode is in the real-data ballpark. n=100 is too
+small to call it "calibrated" beyond that; per-version cells have n=3-37.
 
-## Known caveat
+## Fixed: v11 = 0% was a generator bug (quiet zone)
 
-Per-version decode rate is non-monotonic in the 100-sample smoke:
+The original 22% run showed v11 at 0% degraded. Cause: `synth._render`
+sized modules as `img_size // n` and centred the leftover, so the white
+border varied by version (v11: 1.5 modules, v14: 0, v13: 2) while the
+perspective warp moves corners up to ~31 px. Codes were pushed off-canvas.
+Perspective-only test (no blur), 120 random codes: 66/120 decoded before,
+119/120 after. `_render` now always reserves a 4-module quiet zone (spec).
+Side effect: px/module drops by ~1 for some versions (v11 at 512: 8 -> 7).
 
-| version | clean | degraded |
+| version | degraded before | degraded after |
 |---|---|---|
-| 10 | 100% | 35% |
-| 11 | 100% | 0% |
-| 12 | 100% | 38% |
-
-v11 at 0% stands out. Likely a segno byte-mode-margin interaction (the
-rendered QR fits but is close to the decoder's edge; our mild perspective
-warp pushes it over). Doesn't block Phase 2 — module-space training uses
-the module grid directly, not the pixel decode. Investigate when it
-starts to matter.
+| 10 | 35% | 32% |
+| 11 | **0%** | **35%** |
+| 12 | 38% | 44% |
+| 13 | 11% | 11% |
 
 ## Immediate uses
 

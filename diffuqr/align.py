@@ -66,26 +66,45 @@ def ecc_refine(frame_bp: np.ndarray, ref_bp: np.ndarray, init_ref_to_frame: np.n
     return W
 
 
+def rotation_init(k: int, ref_shape, frame_shape) -> np.ndarray:
+    """Homography REF -> FRAME that rotates the reference by k * 90 degrees
+    (counter-clockwise, as np.rot90) about its centre and centres it in the
+    frame. Needed because reference photos can be stored sideways (EXIF
+    orientation) while frames are upright; ORB alone often fails on blur."""
+    hr, wr = ref_shape[:2]
+    hf, wf = frame_shape[:2]
+    T1 = np.array([[1, 0, -(wr - 1) / 2], [0, 1, -(hr - 1) / 2], [0, 0, 1]], dtype=np.float64)
+    a = -np.pi / 2 * k  # image y axis points down
+    c, s = round(np.cos(a)), round(np.sin(a))
+    R = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]], dtype=np.float64)
+    T2 = np.array([[1, 0, (wf - 1) / 2], [0, 1, (hf - 1) / 2], [0, 0, 1]], dtype=np.float64)
+    return T2 @ R @ T1
+
+
 def align_reference_to_frame(
     frame_bgr: np.ndarray,
     ref_bgr: np.ndarray,
     ncc_thresh: float = 0.5,
-) -> Tuple[Optional[np.ndarray], float]:
+    try_rotations: bool = True,
+    return_warp: bool = False,
+):
     """Warp the clean reference onto the degraded frame's geometry.
-    Tries ORB-initialised and identity-initialised ECC, keeps the better one.
-    Returns (warped_reference_or_None, alignment_score).
+    Tries ORB-initialised ECC plus identity (and, if `try_rotations`, 90/180/
+    270 degree) initialisations; keeps the best by band-passed NCC.
+    Returns (warped_reference_or_None, alignment_score), plus W (FRAME ->
+    REF coords, 3x3) as a third element if `return_warp`.
     """
     h, w = frame_bgr.shape[:2]
     frame_gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
     ref_gray = cv2.cvtColor(ref_bgr, cv2.COLOR_BGR2GRAY)
     frame_bp, ref_bp = bandpass(frame_gray), bandpass(ref_gray)
 
-    inits = [np.eye(3, dtype=np.float64)]
+    inits = [rotation_init(k, ref_gray.shape, frame_gray.shape) for k in (range(4) if try_rotations else [0])]
     H0 = orb_homography(frame_gray, ref_gray)
     if H0 is not None:
         inits.insert(0, H0)
 
-    best_img, best_score = None, -1.0
+    best_img, best_score, best_W = None, -1.0, None
     for init in inits:
         W = ecc_refine(frame_bp, ref_bp, init)
         warped = cv2.warpPerspective(
@@ -95,5 +114,6 @@ def align_reference_to_frame(
         )
         score = ncc(frame_bp, bandpass(cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)))
         if score > best_score:
-            best_img, best_score = warped, score
-    return (best_img if best_score >= ncc_thresh else None), best_score
+            best_img, best_score, best_W = warped, score, W
+    img = best_img if best_score >= ncc_thresh else None
+    return (img, best_score, best_W) if return_warp else (img, best_score)
