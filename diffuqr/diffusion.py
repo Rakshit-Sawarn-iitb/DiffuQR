@@ -118,6 +118,16 @@ class ModelConfig:
     attn_level: int = 2  # index of the down block with attention (2 -> 24x24 on a 96 canvas)
 
 
+class _UNet(UNet2DModel):
+    """UNet2DModel whose `dtype` comes from a concrete weight. diffusers'
+    default walks `self.parameters()`, which is empty on nn.DataParallel
+    replicas and then fails (UnboundLocalError on Python 3.13)."""
+
+    @property
+    def dtype(self) -> torch.dtype:
+        return self.conv_in.weight.dtype
+
+
 class ModuleDiffusion(nn.Module):
     N_STRUCT = 5  # x_t, self-cond, known_val, known_mask, valid
 
@@ -128,7 +138,7 @@ class ModuleDiffusion(nn.Module):
         n = len(cfg.block_out)
         down = tuple("AttnDownBlock2D" if i == cfg.attn_level else "DownBlock2D" for i in range(n))
         up = tuple("AttnUpBlock2D" if (n - 1 - i) == cfg.attn_level else "UpBlock2D" for i in range(n))
-        self.unet = UNet2DModel(
+        self.unet = _UNet(
             sample_size=CANVAS, in_channels=self.N_STRUCT + cfg.cond_ch, out_channels=1,
             layers_per_block=cfg.layers_per_block, block_out_channels=tuple(cfg.block_out),
             down_block_types=down, up_block_types=up, norm_num_groups=min(32, cfg.block_out[0]),
