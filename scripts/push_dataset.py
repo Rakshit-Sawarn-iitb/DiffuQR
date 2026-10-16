@@ -32,8 +32,8 @@ from huggingface_hub import (
     HfApi,
 )
 
-from config import DATA_DIR, EVERY_N_FRAMES, FRAMES_DIR, HF_REPO_ID, HF_TOKEN, parse_session_id
-from extract_frames import extract_frames
+from diffuqr.config import DATA_DIR, EVERY_N_FRAMES, FRAMES_DIR, HF_REPO_ID, HF_TOKEN, parse_session_id
+from scripts.extract_frames import extract_frames
 
 
 def sha256_of(path: Path, chunk: int = 1 << 20) -> str:

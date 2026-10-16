@@ -21,7 +21,7 @@ from pathlib import Path
 
 import cv2
 
-from config import EVERY_N_FRAMES, FRAMES_DIR, parse_session_id
+from diffuqr.config import EVERY_N_FRAMES, FRAMES_DIR, parse_session_id
 
 
 def extract_frames(

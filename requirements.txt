@@ -1,0 +1,19 @@
+# Core
+numpy
+opencv-python
+pillow
+python-dotenv
+huggingface_hub
+tqdm
+
+# Decoding + synthetic QR generation (Phase 0 + Phase 1)
+pyzbar
+segno
+qrcode
+reedsolo
+
+# Training (installed on Kaggle anyway; listed here for local parity)
+torch
+diffusers
+accelerate
+matplotlib

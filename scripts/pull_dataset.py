@@ -17,7 +17,7 @@ import sys
 
 from huggingface_hub import snapshot_download
 
-from config import DATA_DIR, HF_REPO_ID, HF_TOKEN
+from diffuqr.config import DATA_DIR, HF_REPO_ID, HF_TOKEN
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--repo-id", default=HF_REPO_ID)

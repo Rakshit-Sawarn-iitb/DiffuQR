@@ -1,9 +1,8 @@
 """
-config.py
+Project-wide paths, .env loading, and session-id parsing.
 
-Shared settings for all scripts: project paths, .env loading, and
-session-id parsing. Anything that rarely changes lives here (or in .env)
-instead of being passed as a CLI argument on every run.
+Anything that rarely changes lives here (or in .env) instead of being passed
+as a CLI argument on every run.
 
 .env example (project root):
     HF_TOKEN=hf_xxxxxxxxxxxxxxxxx
@@ -17,13 +16,23 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-# Anchor everything to the project root, not the current working directory,
-# so scripts behave the same no matter where they are launched from.
+# Anchor everything to the project root, not the current working directory.
+# diffuqr/config.py -> parents[1] = project root
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(PROJECT_ROOT / ".env")
 
 DATA_DIR = PROJECT_ROOT / "data"
 FRAMES_DIR = DATA_DIR / "frames"
+SESSIONS_DIR = DATA_DIR / "sessions"
+RAW_DIR = DATA_DIR / "raw"
+ANNOTATIONS_DIR = DATA_DIR / "annotations"
+CALIBRATION_DIR = DATA_DIR / "calibration"
+SYNTH_DIR = DATA_DIR / "synth"
+
+ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
+PHASE0_DIR = ARTIFACTS_DIR / "phase0"
+FIGURES_DIR = ARTIFACTS_DIR / "figures"
+CHECKPOINTS_DIR = ARTIFACTS_DIR / "checkpoints"
 
 HF_TOKEN = os.environ.get("HF_TOKEN")
 HF_REPO_ID = os.environ.get("HF_REPO_ID", "your-team/buggy-qr-dataset")

@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "diffuqr"
+version = "0.1.0"
+description = "Structure-aware diffusion restoration for QR codes filmed from moving buggies."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Rakshit Sawarn" }]
+dependencies = [
+    "numpy",
+    "opencv-python",
+    "pillow",
+    "python-dotenv",
+    "huggingface_hub",
+    "tqdm",
+]
+
+[project.optional-dependencies]
+decode = ["pyzbar", "segno", "qrcode", "reedsolo"]
+train  = ["torch", "diffusers", "accelerate", "matplotlib"]
+dev    = ["ruff", "pytest"]
+
+[tool.setuptools.packages.find]
+include = ["diffuqr*"]

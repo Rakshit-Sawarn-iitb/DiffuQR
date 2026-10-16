@@ -216,4 +216,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# DiffuQR local I/O
 /data/
+/artifacts/*
+!/artifacts/.gitkeep
