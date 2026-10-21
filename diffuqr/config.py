@@ -38,6 +38,15 @@ HF_TOKEN = os.environ.get("HF_TOKEN")
 HF_REPO_ID = os.environ.get("HF_REPO_ID", "your-team/buggy-qr-dataset")
 EVERY_N_FRAMES = int(os.environ.get("EVERY_N_FRAMES", "3"))
 
+
+def reference_photo(qr_id: str) -> Path:
+    """The ground-truth photo of `qr_id` under raw/reference_photos/ (.jpg, .jpeg or .png)."""
+    hits = [p for p in sorted((RAW_DIR / "reference_photos").glob(f"{qr_id}.*"))
+            if p.suffix.lower() in (".jpg", ".jpeg", ".png")]
+    if len(hits) != 1:
+        raise FileNotFoundError(f"expected one reference photo for '{qr_id}', found {[p.name for p in hits]}")
+    return hits[0]
+
 # session_id = <qr_id>_<YYYYMMDD>_<take>   e.g. buggy03_20260918_01
 #   qr_id : the physical QR code / vehicle (one ground-truth photo per qr_id)
 #   date  : recording date

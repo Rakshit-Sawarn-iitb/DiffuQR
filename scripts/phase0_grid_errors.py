@@ -68,8 +68,9 @@ def to_bgr(rgb):
 def prepare_reference(qr_id: str, sam3) -> dict:
     meta = json.loads((config.CALIBRATION_DIR / f"{qr_id}_qrmeta.json").read_text(encoding="utf-8"))
     gt = np.load(config.CALIBRATION_DIR / f"{qr_id}_modules.npy")
-    box = pick_square_box(sam3[f"raw/reference_photos/{qr_id}.jpg"]["boxes"])
-    ref = np.asarray(crop_square(Image.open(config.RAW_DIR / "reference_photos" / f"{qr_id}.jpg").convert("RGB"),
+    photo = config.reference_photo(qr_id)
+    box = pick_square_box(sam3[f"raw/reference_photos/{photo.name}"]["boxes"])
+    ref = np.asarray(crop_square(Image.open(photo).convert("RGB"),
                                  box, pad_frac=PAD))
     quad = None
     for f in (1.0, 0.5, 0.3):

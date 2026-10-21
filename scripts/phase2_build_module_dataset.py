@@ -80,16 +80,26 @@ def build_synth(args) -> None:
     print(f"Wrote {args.n} synthetic samples -> {out}")
 
 
+def visible_fraction(quad: np.ndarray, w: int, h: int) -> float:
+    """Fraction of the QR quad's area inside the crop. The crop window is shifted to stay inside
+    the camera image (`crop_square`), so this is the fraction of the code inside the camera frame."""
+    q = cv2.convexHull(quad.astype(np.float32))
+    inter, _ = cv2.intersectConvexConvex(q, np.float32([[0, 0], [w, 0], [w, h], [0, h]]).reshape(-1, 1, 2))
+    return float(inter / max(cv2.contourArea(q), 1e-9))
+
+
 def build_real(args) -> None:
     cfg = ModuleSampleConfig()
     sam3 = load_sam3_boxes()
     MODSPACE_DIR.mkdir(parents=True, exist_ok=True)
     sessions = sorted({p.stem for p in config.SESSIONS_DIR.glob("*.json") if (config.FRAMES_DIR / p.stem).is_dir()})
+    if args.session:
+        sessions = [s for s in sessions if s in args.session]
     for sid in sessions:
         R = prepare_reference(sid.split("_", 1)[0], sam3)
         n = modules_for_version(R["meta"]["version"])
         side = (n + 2 * cfg.margin) * cfg.px_per_module
-        inputs, idxs, blurs, aligned = [], [], [], []
+        inputs, idxs, blurs, aligned, visible = [], [], [], [], []
         frames = sorted((config.FRAMES_DIR / sid).glob(f"{sid}_f*.jpg"))
         t0 = time.time()
         for i, fp in enumerate(frames):
@@ -106,9 +116,11 @@ def build_real(args) -> None:
             if score < args.ncc_thresh:
                 inputs.append(np.zeros((side, side), np.uint8))
                 aligned.append(False)
+                visible.append(np.nan)
                 continue
             q = cv2.perspectiveTransform(R["quad512"].reshape(-1, 1, 2).astype(np.float64),
                                          np.linalg.inv(W).astype(np.float64)).reshape(4, 2) * (F.shape[0] / ALIGN_PX)
+            visible.append(visible_fraction(q, F.shape[1], F.shape[0]))
             gray = cv2.cvtColor(F, cv2.COLOR_RGB2GRAY)
             inp = rectify_quad(gray, q, n, cfg.px_per_module, cfg.margin)
             inputs.append(np.ascontiguousarray(np.rot90(inp, R["rotation"])))
@@ -122,6 +134,7 @@ def build_real(args) -> None:
         meta = R["meta"]
         np.savez_compressed(MODSPACE_DIR / f"real_{sid}.npz", inputs=np.stack(inputs), target=R["gt"],
                             frame_idx=np.array(idxs), blur=blurs, tertile=tert, aligned=np.array(aligned),
+                            visible_frac=np.array(visible, np.float32),
                             meta=json.dumps({k: meta[k] for k in ("version", "error", "mask", "payload")}))
         print(f"[{sid}] wrote {N} frames ({int(np.sum(aligned))} aligned) -> real_{sid}.npz")
 
@@ -162,6 +175,9 @@ def check(args) -> None:
         row(p.stem, "all aligned", e, o)
         for t in ("blurriest", "medium", "sharpest"):
             row(p.stem, t, e[tert == t], o[tert == t])
+        if "visible_frac" in d.files:
+            vis = d["visible_frac"][keep] >= 0.99
+            row(p.stem, "QR fully in frame", e[vis], o[vis])
 
     shards = sorted((MODSPACE_DIR / args.tag).glob("synth_v*.npz"))
     E, O, KL = [], [], []
@@ -201,6 +217,7 @@ def main() -> None:
     s.add_argument("--shard-size", type=int, default=256)
     r = sub.add_parser("real")
     r.add_argument("--ncc-thresh", type=float, default=0.5)
+    r.add_argument("--session", nargs="*", help="only these session ids (default: all)")
     c = sub.add_parser("check")
     c.add_argument("--tag", default="v1")
     args = p.parse_args()

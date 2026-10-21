@@ -221,3 +221,6 @@ __marimo__/
 /data/
 /artifacts/*
 !/artifacts/.gitkeep
+
+# Training results (CSV contains the real merchant UPI payload)
+results/

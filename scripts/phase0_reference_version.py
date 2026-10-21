@@ -100,7 +100,7 @@ def main() -> None:
     lines = ["# Phase 0.2b - Measured QR version per reference photo", ""]
     lines += ["Replaces the version-11 assumption in `pixel_module_stats_summary.md`.", ""]
     for qr_id, box in sorted(boxes.items()):
-        path = config.RAW_DIR / "reference_photos" / f"{qr_id}.jpg"
+        path = config.reference_photo(qr_id)
         pil = Image.open(path).convert("RGB")  # raw orientation, matches SAM3 box
         x1, y1, x2, y2 = box
         pad = 0.08 * max(x2 - x1, y2 - y1)
