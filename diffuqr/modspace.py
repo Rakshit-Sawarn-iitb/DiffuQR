@@ -39,6 +39,10 @@ from diffuqr.synth import random_payload, _CHAR_TARGET
 
 BANK_PX_PER_MODULE = 256 / (1.15 * 61)
 
+# Payload budgets (chars) for versions below synth._CHAR_TARGET's range: ~95% of the byte-mode
+# capacity at EC-L, so a payload scaled by the EC factor in _random_code fits the target version.
+_LOW_V_BUDGET = {1: 16, 2: 30, 3: 50, 4: 74, 5: 100, 6: 127, 7: 146, 8: 182, 9: 218}
+
 
 @dataclass
 class ModuleSampleConfig:
@@ -110,9 +114,11 @@ def _random_code(rng: random.Random, cfg: ModuleSampleConfig):
     state = random.getstate()
     random.seed(rng.random())  # synth payload samplers use the global RNG
     try:
-        budget = _CHAR_TARGET.get(target_v, 300)
+        budget = _LOW_V_BUDGET.get(target_v) or _CHAR_TARGET.get(target_v, 300)
         scale = {"L": 1.0, "M": 0.78, "Q": 0.56, "H": 0.43}[error]
-        payload = random_payload(min_len=20, max_len=max(25, int(budget * scale)))
+        # Unchanged for v >= 10 (max_len >= 47 there); small versions need shorter payloads to fit.
+        max_len = int(budget * scale) if target_v in _LOW_V_BUDGET else max(25, int(budget * scale))
+        payload = random_payload(min_len=min(20, max(1, max_len // 2)), max_len=max_len)
     finally:
         random.setstate(state)
     for v in range(target_v, 41):
@@ -129,9 +135,12 @@ def make_synthetic_sample(rng: random.Random, bank: KernelBank, cfg: ModuleSampl
     grid = np.array(qr.matrix, dtype=np.uint8)
     n = grid.shape[0]
     s = rng.uniform(*cfg.camera_ppm)
+    # Below ~6 px/module a camera pixel averages several paper texels: render the camera image f times
+    # finer and area-downsample it (f = 1, i.e. unchanged, over the original 7-16 px/module range).
+    f = max(1, int(np.ceil(6.0 / s)))
 
     # Clean render on paper at >= camera resolution (integer px/module), then map into camera space.
-    ss = int(np.ceil(s))
+    ss = int(np.ceil(s * f))
     qz = rng.randint(4, 8)
     paper = rng.uniform(0.75, 0.95)
     ink = rng.uniform(0.02, 0.18)
@@ -149,10 +158,12 @@ def make_synthetic_sample(rng: random.Random, bank: KernelBank, cfg: ModuleSampl
     jit = np.float32([[rng.uniform(-1, 1), rng.uniform(-1, 1)] for _ in range(4)]) * amp * sym_px
     cam_quad = sq + jit
     src_sym = np.float32([[qz, qz], [qz + n, qz], [qz + n, qz + n], [qz, qz + n]]) * ss
-    H = cv2.getPerspectiveTransform(src_sym, cam_quad)
+    H = cv2.getPerspectiveTransform(src_sym, cam_quad * f)
     bg = rng.uniform(0.2, 0.9)
-    cam = cv2.warpPerspective(clean, H, (cam_side, cam_side), flags=cv2.INTER_LINEAR,
+    cam = cv2.warpPerspective(clean, H, (cam_side * f, cam_side * f), flags=cv2.INTER_LINEAR,
                               borderMode=cv2.BORDER_CONSTANT, borderValue=bg)
+    if f > 1:
+        cam = cv2.resize(cam, (cam_side, cam_side), interpolation=cv2.INTER_AREA)
 
     k = rescale_kernel(bank.sample(rng, cfg.hard_frac), s / BANK_PX_PER_MODULE)
     cam = cv2.filter2D(cam, -1, k, borderType=cv2.BORDER_REPLICATE)

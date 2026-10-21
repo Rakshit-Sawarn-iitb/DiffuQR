@@ -326,9 +326,10 @@ class PoolDataset(torch.utils.data.Dataset):
     Pool entries: (input_u8, grid_u8, version)."""
 
     def __init__(self, pool: List[tuple], length: int, p_fresh: float = 0.0, bank_path: Optional[str] = None,
-                 seed: int = 0):
+                 seed: int = 0, sample_cfg=None):
         self.pool, self.length, self.p_fresh = pool, length, p_fresh
         self.bank_path, self.seed = bank_path, seed
+        self.sample_cfg = sample_cfg   # diffuqr.modspace.ModuleSampleConfig for fresh samples (None = default)
         self._bank = None
         self._rng = None
 
@@ -348,35 +349,38 @@ class PoolDataset(torch.utils.data.Dataset):
             from diffuqr.modspace import KernelBank, ModuleSampleConfig, make_synthetic_sample
             if self._bank is None:
                 self._bank = KernelBank.load(self.bank_path)
-            s = make_synthetic_sample(rng, self._bank, ModuleSampleConfig())
+            s = make_synthetic_sample(rng, self._bank, self.sample_cfg or ModuleSampleConfig())
             return make_example(s["input"], s["target"], s["version"])
         inp, grid, version = self.pool[rng.randrange(len(self.pool))]
         return make_example(inp, grid, version)
 
 
 _GEN_BANK = None
+_GEN_CFG = None
 
 
-def _gen_init(bank_path: str) -> None:
-    global _GEN_BANK
-    from diffuqr.modspace import KernelBank
+def _gen_init(bank_path: str, cfg=None) -> None:
+    global _GEN_BANK, _GEN_CFG
+    from diffuqr.modspace import KernelBank, ModuleSampleConfig
     _GEN_BANK = KernelBank.load(bank_path)
+    _GEN_CFG = cfg or ModuleSampleConfig()
 
 
 def _gen_one(seed: int):
-    from diffuqr.modspace import ModuleSampleConfig, make_synthetic_sample
-    s = make_synthetic_sample(random.Random(seed), _GEN_BANK, ModuleSampleConfig())
+    from diffuqr.modspace import make_synthetic_sample
+    s = make_synthetic_sample(random.Random(seed), _GEN_BANK, _GEN_CFG)
     return s["input"], s["target"], s["version"], s["payload"], float(s["kernel_len_modules"])
 
 
-def generate_pool(n: int, bank_path: str, seed0: int, workers: int = 4) -> List[tuple]:
+def generate_pool(n: int, bank_path: str, seed0: int, workers: int = 4, cfg=None) -> List[tuple]:
     """n synthetic samples in parallel. Returns [(input, grid, version, payload, kernel_len_modules)].
-    Seeds seed0 .. seed0+n-1, so train/val pools with disjoint seed ranges never overlap."""
+    Seeds seed0 .. seed0+n-1, so train/val pools with disjoint seed ranges never overlap.
+    cfg: diffuqr.modspace.ModuleSampleConfig (None = default)."""
     import multiprocessing as mp
     seeds = range(seed0, seed0 + n)
     if workers <= 1:
-        _gen_init(bank_path)
+        _gen_init(bank_path, cfg)
         return [_gen_one(s) for s in seeds]
     with mp.get_context("fork" if hasattr(__import__("os"), "fork") else "spawn").Pool(
-            workers, initializer=_gen_init, initargs=(bank_path,)) as pool:
+            workers, initializer=_gen_init, initargs=(bank_path, cfg)) as pool:
         return list(pool.imap(_gen_one, seeds, chunksize=16))
